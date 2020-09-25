@@ -1,0 +1,93 @@
+# Our pipeline
+# We will make a dag. That will allow us to do pre proc first and then train models in parallel.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: ml-pipeline-
+spec:
+  entrypoint: ml-pipeline
+  templates:
+  
+  # definning the flow of our pipeline
+  - name: ml-pipeline
+    dag:
+        tasks:
+          - name: preprocessing
+            template: preproc
+          - name: training-rf
+            dependencies: [preprocessing]
+            template: randomforrest
+            arguments:
+              artifacts:
+              - name: x_train
+                from: tasks.preprocessing.outputs.artifacts.x_train
+              - name: x_test
+                from: tasks.preprocessing.outputs.artifacts.x_test
+              - name: y_train
+                from: tasks.preprocessing.outputs.artifacts.y_train
+              - name: y_test
+                from: tasks.preprocessing.outputs.artifacts.y_test                                                
+          
+          - name: training-lasso
+            dependencies: [preprocessing]
+            template: lasso
+            arguments:
+              artifacts:
+              - name: x_train
+                from: tasks.preprocessing.outputs.artifacts.x_train
+              - name: x_test
+                from: tasks.preprocessing.outputs.artifacts.x_test
+              - name: y_train
+                from: tasks.preprocessing.outputs.artifacts.y_train
+              - name: y_test
+                from: tasks.preprocessing.outputs.artifacts.y_test            
+
+    # defining the individual steps of our pipeline
+    - name: preproc
+      container: 
+        image: docker.io/manikmal/ml_pipline
+        command: [sh, -c]
+        args: ["python3 codes/preproc.py"]
+      outputs:
+        artifacts:
+        - name: x_train
+          path: x_train.csv
+        - name: x_test
+          path: x_test.csv
+        - name: y_train
+          path: y_train.csv
+        - name: y_test
+          path: y_test.csv
+
+    - name: randomforrest
+      inputs: 
+        artifacts:
+        - name: x_train
+          path: x_train.csv
+        - name: x_test
+          path: x_test.csv
+        - name: y_train
+          path: y_train.csv
+        - name: y_test
+          path: y_test.csv
+      container:
+        image: docker.io/manikmal/ml_pipline
+        command: [sh, -c]
+        args: ["python3 codes/rf.py"]  
+
+    - name: lasso
+      inputs: 
+        artifacts:
+        - name: x_train
+          path: x_train.csv
+        - name: x_test
+          path: x_test.csv
+        - name: y_train
+          path: y_train.csv
+        - name: y_test
+          path: y_test.csv
+      container:
+        image: docker.io/manikmal/ml_pipline
+        command: [sh, -c]
+        args: ["python3 codes/lasso.py"]           
+
